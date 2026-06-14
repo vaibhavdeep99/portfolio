@@ -1,0 +1,17 @@
+{
+  "name": "vaibhav-portfolio-fullstack",
+  "version": "1.0.0",
+  "description": "Fullstack Portfolio Website with Admin Panel",
+  "main": "backend/server.js",
+  "scripts": {
+    "install-backend": "cmd /c \"cd backend && npm install\"",
+    "install-frontend": "cmd /c \"cd frontend && npm install\"",
+    "install-all": "cmd /c \"npm run install-backend && npm run install-frontend\"",
+    "backend": "node backend/server.js",
+    "frontend": "cmd /c \"npm run --prefix frontend dev\"",
+    "dev": "npx concurrently \"node backend/server.js\" \"npm run --prefix frontend dev\""
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
