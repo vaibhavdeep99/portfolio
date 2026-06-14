@@ -7,11 +7,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://portfolio-woad-nu-gmctq1jfan.vercel.app',
+        target: 'http://localhost:5000',
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'https://portfolio-woad-nu-gmctq1jfan.vercel.app',
+        target: 'http://localhost:5000',
         changeOrigin: true,
       }
     }
