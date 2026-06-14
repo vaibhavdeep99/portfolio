@@ -4,12 +4,27 @@ const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
+const mongoose = require('mongoose');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
+
+const { Portfolio, Message } = require('./models');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const JWT_SECRET = process.env.JWT_SECRET || 'vaibhav_portfolio_secret_key_2026';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/vaibhav-portfolio';
+
+// Connect to MongoDB
+mongoose.connect(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => console.log('MongoDB connected successfully'))
+.catch(err => {
+  console.error('MongoDB connection failed:', err.message);
+  console.log('Falling back to JSON file storage...');
+});
 
 // Middleware
 app.use(cors({
@@ -54,31 +69,56 @@ const upload = multer({
 // Serve uploaded files statically
 app.use('/uploads', express.static(uploadsDir));
 
-// Helper Functions
-const getPortfolioData = () => {
-  const filePath = path.join(dataDir, 'portfolio.json');
-  if (!fs.existsSync(filePath)) {
-    return {};
+// Helper Functions (MongoDB)
+const getPortfolioData = async () => {
+  try {
+    const portfolio = await Portfolio.findOne();
+    return portfolio ? portfolio.toObject() : {};
+  } catch (error) {
+    console.error('Error fetching from MongoDB:', error);
+    // Fallback to JSON
+    const filePath = path.join(dataDir, 'portfolio.json');
+    if (!fs.existsSync(filePath)) {
+      return {};
+    }
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
   }
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 };
 
-const savePortfolioData = (data) => {
-  const filePath = path.join(dataDir, 'portfolio.json');
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-};
-
-const getMessages = () => {
-  const filePath = path.join(dataDir, 'messages.json');
-  if (!fs.existsSync(filePath)) {
-    return [];
+const savePortfolioData = async (data) => {
+  try {
+    await Portfolio.findOneAndUpdate({}, data, { upsert: true, new: true });
+  } catch (error) {
+    console.error('Error saving to MongoDB:', error);
+    // Fallback to JSON
+    const filePath = path.join(dataDir, 'portfolio.json');
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
   }
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 };
 
-const saveMessages = (messages) => {
-  const filePath = path.join(dataDir, 'messages.json');
-  fs.writeFileSync(filePath, JSON.stringify(messages, null, 2), 'utf8');
+const getMessages = async () => {
+  try {
+    const messages = await Message.find().sort({ createdAt: -1 });
+    return messages;
+  } catch (error) {
+    console.error('Error fetching messages from MongoDB:', error);
+    // Fallback to JSON
+    const filePath = path.join(dataDir, 'messages.json');
+    if (!fs.existsSync(filePath)) {
+      return [];
+    }
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  }
+};
+
+const saveMessages = async (messages) => {
+  try {
+    // Messages are saved individually, this is a fallback function
+    const filePath = path.join(dataDir, 'messages.json');
+    fs.writeFileSync(filePath, JSON.stringify(messages, null, 2), 'utf8');
+  } catch (error) {
+    console.error('Error saving messages:', error);
+  }
 };
 
 // Authentication Middleware
@@ -102,9 +142,9 @@ const authenticateToken = (req, res, next) => {
 // API Endpoints
 
 // Public portfolio fetch
-app.get('/api/portfolio', (req, res) => {
+app.get('/api/portfolio', async (req, res) => {
   try {
-    const data = getPortfolioData();
+    const data = await getPortfolioData();
     res.json(data);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch portfolio data.', error: error.message });
@@ -128,11 +168,11 @@ app.get('/api/auth/verify', authenticateToken, (req, res) => {
   res.json({ valid: true });
 });
 
-// Admin portfolio updates (entire update or specific sections can be handled frontend-side and posted back)
-app.post('/api/portfolio', authenticateToken, (req, res) => {
+// Admin portfolio updates
+app.post('/api/portfolio', authenticateToken, async (req, res) => {
   try {
     const newData = req.body;
-    savePortfolioData(newData);
+    await savePortfolioData(newData);
     res.json({ message: 'Portfolio updated successfully!', success: true });
   } catch (error) {
     res.status(500).json({ message: 'Failed to save portfolio data.', error: error.message });
@@ -140,7 +180,7 @@ app.post('/api/portfolio', authenticateToken, (req, res) => {
 });
 
 // Contact message submit (public)
-app.post('/api/contact', (req, res) => {
+app.post('/api/contact', async (req, res) => {
   try {
     const { name, email, phone, projectType, budget, timeline, details } = req.body;
     
@@ -148,8 +188,7 @@ app.post('/api/contact', (req, res) => {
       return res.status(400).json({ message: 'Name, email, and project details are required.' });
     }
     
-    const messages = getMessages();
-    const newMessage = {
+    const newMessage = new Message({
       id: Date.now().toString(),
       name,
       email,
@@ -158,12 +197,11 @@ app.post('/api/contact', (req, res) => {
       budget: budget || 'Not specified',
       timeline: timeline || 'Not specified',
       details,
-      createdAt: new Date().toISOString()
-    };
+      createdAt: new Date(),
+      read: false
+    });
     
-    messages.push(newMessage);
-    saveMessages(messages);
-    
+    await newMessage.save();
     res.json({ message: 'Your request has been sent successfully!', success: true });
   } catch (error) {
     res.status(500).json({ message: 'Failed to process inquiry.', error: error.message });
@@ -171,9 +209,9 @@ app.post('/api/contact', (req, res) => {
 });
 
 // Fetch all contact messages (Admin only)
-app.get('/api/messages', authenticateToken, (req, res) => {
+app.get('/api/messages', authenticateToken, async (req, res) => {
   try {
-    const messages = getMessages();
+    const messages = await Message.find().sort({ createdAt: -1 });
     res.json(messages);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch inquiries.', error: error.message });
@@ -181,19 +219,15 @@ app.get('/api/messages', authenticateToken, (req, res) => {
 });
 
 // Delete a message (Admin only)
-app.delete('/api/messages/:id', authenticateToken, (req, res) => {
+app.delete('/api/messages/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    let messages = getMessages();
+    const result = await Message.findOneAndDelete({ id });
     
-    const initialLength = messages.length;
-    messages = messages.filter(msg => msg.id !== id);
-    
-    if (messages.length === initialLength) {
+    if (!result) {
       return res.status(404).json({ message: 'Inquiry not found.' });
     }
     
-    saveMessages(messages);
     res.json({ message: 'Inquiry deleted successfully.', success: true });
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete inquiry.', error: error.message });
@@ -201,17 +235,18 @@ app.delete('/api/messages/:id', authenticateToken, (req, res) => {
 });
 
 // Resume PDF upload (Admin only)
-app.post('/api/resume/upload', authenticateToken, upload.single('resume'), (req, res) => {
+app.post('/api/resume/upload', authenticateToken, upload.single('resume'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded.' });
     }
     
-    // Update the portfolio JSON to point to the uploaded resume
-    const portfolio = getPortfolioData();
+    // Update the portfolio to point to the uploaded resume
+    const portfolio = await getPortfolioData();
     const resumeUrl = `/uploads/${req.file.filename}`;
+    portfolio.profile = portfolio.profile || {};
     portfolio.profile.resumeUrl = resumeUrl;
-    savePortfolioData(portfolio);
+    await savePortfolioData(portfolio);
     
     res.json({ 
       message: 'Resume uploaded successfully!', 
