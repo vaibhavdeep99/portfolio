@@ -10,7 +10,7 @@ function App() {
 
   const fetchPortfolioData = async () => {
     try {
-      const response = await fetch('/api/portfolio');
+      const response = await fetch('http://localhost:5000/api/portfolio');
       if (response.ok) {
         const data = await response.json();
         setPortfolioData(data);
