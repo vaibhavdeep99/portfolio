@@ -1,6 +1,4 @@
-## `server.js`
 
-```js
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -296,4 +294,3 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
-```
