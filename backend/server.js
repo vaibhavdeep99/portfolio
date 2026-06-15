@@ -19,11 +19,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 // ✅ CORS FIX (IMPORTANT FOR VERCEL)
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'https://portfolio-ljlv-ebjm5akuh-vaibhavdeep99s-projects.vercel.app'
-  ],
+  origin: true, // Dynamically allow any origin (fixes Vercel preview URLs)
   credentials: true,
   methods: ['GET', 'POST', 'DELETE', 'PUT', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
