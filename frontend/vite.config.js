@@ -7,17 +7,5 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     minify: 'esbuild'
-  },
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/uploads': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      }
-    }
   }
 })
