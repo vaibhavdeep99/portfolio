@@ -7,7 +7,10 @@ const multer = require('multer');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+
+// ✅ IMPORTANT: Render safe PORT
+const PORT = process.env.PORT || 10000;
+
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const JWT_SECRET = process.env.JWT_SECRET || 'vaibhav_portfolio_secret_key_2026';
 
@@ -17,128 +20,119 @@ app.use(cors({
   methods: ['GET', 'POST', 'DELETE', 'PUT', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
 
-// Create directories
+// Directories
 const uploadsDir = path.join(__dirname, 'uploads');
+const dataDir = path.join(__dirname, 'data');
+
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-// Multer Storage Configuration
+// Multer config
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
+  destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
-    const fileExt = path.extname(file.originalname);
-    cb(null, `Vaibhav_Deep_Srivastava_Resume${fileExt}`);
+    const ext = path.extname(file.originalname);
+    cb(null, `resume${ext}`);
   }
 });
+
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    const filetypes = /pdf|doc|docx/;
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    if (extname) {
-      return cb(null, true);
-    }
-    cb(new Error('Only PDF and Word documents are allowed!'));
+    const allowed = /pdf|doc|docx/;
+    const ok = allowed.test(path.extname(file.originalname).toLowerCase());
+    if (ok) cb(null, true);
+    else cb(new Error('Only PDF, DOC, DOCX allowed'));
   }
 });
 
-// Serve uploaded files
+// Static files
 app.use('/uploads', express.static(uploadsDir));
 
-// Helper Functions - JSON Only (NO MONGODB)
+/* ---------------- FILE HELPERS ---------------- */
+
+const portfolioFile = path.join(dataDir, 'portfolio.json');
+const messagesFile = path.join(dataDir, 'messages.json');
+
 const getPortfolioData = () => {
-  const filePath = path.join(dataDir, 'portfolio.json');
   try {
-    if (!fs.existsSync(filePath)) {
+    if (!fs.existsSync(portfolioFile)) {
       return { profile: {}, skills: [], projects: [], education: [], internships: [], services: [], certificates: [] };
     }
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (error) {
-    console.error('Error reading portfolio:', error.message);
+    return JSON.parse(fs.readFileSync(portfolioFile, 'utf8'));
+  } catch {
     return { profile: {}, skills: [], projects: [], education: [], internships: [], services: [], certificates: [] };
   }
 };
 
 const savePortfolioData = (data) => {
-  const filePath = path.join(dataDir, 'portfolio.json');
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-  } catch (error) {
-    console.error('Error saving portfolio:', error.message);
-  }
+  fs.writeFileSync(portfolioFile, JSON.stringify(data, null, 2));
 };
 
 const getMessages = () => {
-  const filePath = path.join(dataDir, 'messages.json');
   try {
-    if (!fs.existsSync(filePath)) {
-      return [];
-    }
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (error) {
-    console.error('Error reading messages:', error.message);
+    if (!fs.existsSync(messagesFile)) return [];
+    return JSON.parse(fs.readFileSync(messagesFile, 'utf8'));
+  } catch {
     return [];
   }
 };
 
-const saveMessages = (messages) => {
-  const filePath = path.join(dataDir, 'messages.json');
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(messages, null, 2), 'utf8');
-  } catch (error) {
-    console.error('Error saving messages:', error.message);
-  }
+const saveMessages = (data) => {
+  fs.writeFileSync(messagesFile, JSON.stringify(data, null, 2));
 };
 
-// Authentication Middleware
+/* ---------------- AUTH ---------------- */
+
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ message: 'No authentication token provided.' });
-  }
+  if (!token) return res.status(401).json({ message: 'No token provided' });
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ message: 'Invalid or expired token.' });
-    }
+    if (err) return res.status(403).json({ message: 'Invalid token' });
     req.user = user;
     next();
   });
 };
 
-// API Endpoints
+/* ---------------- ROUTES ---------------- */
 
-// Public portfolio fetch
-app.get('/api/portfolio', (req, res) => {
-  try {
-    const data = getPortfolioData();
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch portfolio data.', error: error.message });
-  }
+// Health check
+app.get('/', (req, res) => {
+  res.send('Backend is running 🚀');
 });
 
-// Admin login
+// Portfolio GET
+app.get('/api/portfolio', (req, res) => {
+  res.json(getPortfolioData());
+});
+
+// Portfolio UPDATE (admin)
+app.post('/api/portfolio', authenticateToken, (req, res) => {
+  savePortfolioData(req.body);
+  res.json({ success: true, message: 'Portfolio updated' });
+});
+
+// Login
 app.post('/api/login', (req, res) => {
   const { password } = req.body;
-  
-  if (password === ADMIN_PASSWORD) {
-    const token = jwt.sign({ isAdmin: true }, JWT_SECRET, { expiresIn: '24h' });
-    return res.json({ token, success: true });
+
+  if (password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ success: false });
   }
-  
-  res.status(401).json({ success: false, message: 'Invalid Admin Password.' });
+
+  const token = jwt.sign({ admin: true }, JWT_SECRET, { expiresIn: '24h' });
+
+  res.json({ success: true, token });
 });
 
 // Verify token
@@ -146,240 +140,69 @@ app.get('/api/auth/verify', authenticateToken, (req, res) => {
   res.json({ valid: true });
 });
 
-// Update portfolio
-app.post('/api/portfolio', authenticateToken, (req, res) => {
-  try {
-    const newData = req.body;
-    savePortfolioData(newData);
-    res.json({ message: 'Portfolio updated successfully!', success: true });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to save portfolio data.', error: error.message });
-  }
-});
-
-// Contact message submit
+// Contact form
 app.post('/api/contact', (req, res) => {
-  try {
-    const { name, email, phone, projectType, budget, timeline, details } = req.body;
-    
-    if (!name || !email || !details) {
-      return res.status(400).json({ message: 'Name, email, and project details are required.' });
-    }
-    
-    const messages = getMessages();
-    const newMessage = {
-      id: Date.now().toString(),
-      name,
-      email,
-      phone: phone || 'Not provided',
-      projectType: projectType || 'General Inquiry',
-      budget: budget || 'Not specified',
-      timeline: timeline || 'Not specified',
-      details,
-      createdAt: new Date().toISOString()
-    };
-    
-    messages.push(newMessage);
-    saveMessages(messages);
-    
-    res.json({ message: 'Your request has been sent successfully!', success: true });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to process inquiry.', error: error.message });
+  const { name, email, details } = req.body;
+
+  if (!name || !email || !details) {
+    return res.status(400).json({ message: 'Missing fields' });
   }
+
+  const messages = getMessages();
+
+  messages.push({
+    id: Date.now().toString(),
+    name,
+    email,
+    details,
+    createdAt: new Date().toISOString()
+  });
+
+  saveMessages(messages);
+
+  res.json({ success: true, message: 'Message sent' });
 });
 
-// Fetch messages (Admin only)
+// Get messages (admin)
 app.get('/api/messages', authenticateToken, (req, res) => {
-  try {
-    const messages = getMessages();
-    res.json(messages);
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch inquiries.', error: error.message });
-  }
+  res.json(getMessages());
 });
 
-// Delete message (Admin only)
+// Delete message
 app.delete('/api/messages/:id', authenticateToken, (req, res) => {
-  try {
-    const { id } = req.params;
-    let messages = getMessages();
-    
-    const initialLength = messages.length;
-    messages = messages.filter(msg => msg.id !== id);
-    
-    if (messages.length === initialLength) {
-      return res.status(404).json({ message: 'Inquiry not found.' });
-    }
-    
-    saveMessages(messages);
-    res.json({ message: 'Inquiry deleted successfully.', success: true });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to delete inquiry.', error: error.message });
-  }
+  let messages = getMessages();
+
+  messages = messages.filter(m => m.id !== req.params.id);
+
+  saveMessages(messages);
+
+  res.json({ success: true });
 });
 
-// Resume upload (Admin only)
+// Resume upload
 app.post('/api/resume/upload', authenticateToken, upload.single('resume'), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded.' });
-    }
-    
-    const portfolio = getPortfolioData();
-    const resumeUrl = `/uploads/${req.file.filename}`;
-    if (!portfolio.profile) portfolio.profile = {};
-    portfolio.profile.resumeUrl = resumeUrl;
-    savePortfolioData(portfolio);
-    
-    res.json({ 
-      message: 'Resume uploaded successfully!', 
-      success: true, 
-      resumeUrl 
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Upload failed.', error: error.message });
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
   }
+
+  const portfolio = getPortfolioData();
+  portfolio.profile.resumeUrl = `/uploads/${req.file.filename}`;
+  savePortfolioData(portfolio);
+
+  res.json({
+    success: true,
+    resumeUrl: portfolio.profile.resumeUrl
+  });
 });
 
-// Error handling
+/* ---------------- ERROR HANDLER ---------------- */
+
 app.use((err, req, res, next) => {
-  res.status(500).json({ message: err.message || 'An internal server error occurred.' });
+  res.status(500).json({ message: err.message });
 });
+
+/* ---------------- START SERVER ---------------- */
 
 app.listen(PORT, () => {
-  console.log(`✅ Backend Portfolio Server running on http://localhost:${PORT}`);
-});
-
-// API Endpoints
-
-// Public portfolio fetch
-app.get('/api/portfolio', (req, res) => {
-  try {
-    const data = getPortfolioData();
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch portfolio data.', error: error.message });
-  }
-});
-
-// Admin login
-app.post('/api/login', (req, res) => {
-  const { password } = req.body;
-  
-  if (password === ADMIN_PASSWORD) {
-    const token = jwt.sign({ isAdmin: true }, JWT_SECRET, { expiresIn: '24h' });
-    return res.json({ token, success: true });
-  }
-  
-  res.status(401).json({ success: false, message: 'Invalid Admin Password.' });
-});
-
-// Verify token route (helps frontend check if session is still valid)
-app.get('/api/auth/verify', authenticateToken, (req, res) => {
-  res.json({ valid: true });
-});
-
-// Admin portfolio updates
-app.post('/api/portfolio', authenticateToken, (req, res) => {
-  try {
-    const newData = req.body;
-    savePortfolioData(newData);
-    res.json({ message: 'Portfolio updated successfully!', success: true });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to save portfolio data.', error: error.message });
-  }
-});
-
-// Contact message submit (public)
-app.post('/api/contact', (req, res) => {
-  try {
-    const { name, email, phone, projectType, budget, timeline, details } = req.body;
-    
-    if (!name || !email || !details) {
-      return res.status(400).json({ message: 'Name, email, and project details are required.' });
-    }
-    
-    const messages = getMessages();
-    const newMessage = {
-      id: Date.now().toString(),
-      name,
-      email,
-      phone: phone || 'Not provided',
-      projectType: projectType || 'General Inquiry',
-      budget: budget || 'Not specified',
-      timeline: timeline || 'Not specified',
-      details,
-      createdAt: new Date().toISOString()
-    };
-    
-    messages.push(newMessage);
-    saveMessages(messages);
-    
-    res.json({ message: 'Your request has been sent successfully!', success: true });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to process inquiry.', error: error.message });
-  }
-});
-
-// Fetch all contact messages (Admin only)
-app.get('/api/messages', authenticateToken, (req, res) => {
-  try {
-    const messages = getMessages();
-    res.json(messages);
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch inquiries.', error: error.message });
-  }
-});
-
-// Delete a message (Admin only)
-app.delete('/api/messages/:id', authenticateToken, (req, res) => {
-  try {
-    const { id } = req.params;
-    let messages = getMessages();
-    
-    const initialLength = messages.length;
-    messages = messages.filter(msg => msg.id !== id);
-    
-    if (messages.length === initialLength) {
-      return res.status(404).json({ message: 'Inquiry not found.' });
-    }
-    
-    saveMessages(messages);
-    res.json({ message: 'Inquiry deleted successfully.', success: true });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to delete inquiry.', error: error.message });
-  }
-});
-
-// Resume PDF upload (Admin only)
-app.post('/api/resume/upload', authenticateToken, upload.single('resume'), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded.' });
-    }
-    
-    // Update the portfolio JSON to point to the uploaded resume
-    const portfolio = getPortfolioData();
-    const resumeUrl = `/uploads/${req.file.filename}`;
-    if (!portfolio.profile) portfolio.profile = {};
-    portfolio.profile.resumeUrl = resumeUrl;
-    savePortfolioData(portfolio);
-    
-    res.json({ 
-      message: 'Resume uploaded successfully!', 
-      success: true, 
-      resumeUrl 
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Upload failed.', error: error.message });
-  }
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  res.status(500).json({ message: err.message || 'An internal server error occurred.' });
-});
-
-app.listen(PORT, () => {
-  console.log(`✅ Backend Portfolio Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
