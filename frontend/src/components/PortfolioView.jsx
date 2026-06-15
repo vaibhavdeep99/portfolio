@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, FileText, ArrowRight, ExternalLink, Calendar, GraduationCap, Briefcase, Award } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 const Github = ({ size = 20, ...props }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -121,7 +122,7 @@ const PortfolioView = ({ data, loading }) => {
     setFormStatus({ type: '', message: '' });
 
     try {
-      const response = await fetch('/api/contact', {
+      const response = await fetch(`${API_BASE_URL}/api/contact`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

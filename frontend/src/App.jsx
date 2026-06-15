@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import PortfolioView from './components/PortfolioView';
 import AdminDashboard from './components/AdminDashboard';
+import { API_BASE_URL } from './config';
 
 function App() {
   const [portfolioData, setPortfolioData] = useState(null);
@@ -10,7 +11,7 @@ function App() {
 
   const fetchPortfolioData = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/portfolio');
+      const response = await fetch(`${API_BASE_URL}/api/portfolio`);
       if (response.ok) {
         const data = await response.json();
         setPortfolioData(data);
