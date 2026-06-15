@@ -59,7 +59,7 @@ const AdminDashboard = ({ portfolioData, onUpdateData }) => {
     e.preventDefault();
     setLoginError('');
     try {
-      const response = await fetch('/api/login', {
+    const response = await fetch('https://portfolio-lapg.onrender.com/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })
@@ -84,7 +84,7 @@ const AdminDashboard = ({ portfolioData, onUpdateData }) => {
   const fetchMessages = async () => {
     setLoadingMessages(true);
     try {
-      const response = await fetch('/api/messages', {
+     const response = await fetch('https://portfolio-lapg.onrender.com/api/messages', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.status === 401 || response.status === 403) {
@@ -103,7 +103,7 @@ const AdminDashboard = ({ portfolioData, onUpdateData }) => {
   const deleteMessage = async (id) => {
     if (!window.confirm('Are you sure you want to delete this message inquiry?')) return;
     try {
-      const response = await fetch(`/api/messages/${id}`, {
+     const response = await fetch(`https://portfolio-lapg.onrender.com/api/messages/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -120,7 +120,7 @@ const AdminDashboard = ({ portfolioData, onUpdateData }) => {
 
   const saveAllData = async (updatedData = localData) => {
     try {
-      const response = await fetch('/api/portfolio', {
+    const response = await fetch('https://portfolio-lapg.onrender.com/api/portfolio', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -150,7 +150,7 @@ const AdminDashboard = ({ portfolioData, onUpdateData }) => {
     formData.append('resume', file);
 
     try {
-      const response = await fetch('/api/resume/upload', {
+      const response = await fetch('https://portfolio-lapg.onrender.com/api/resume/upload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
