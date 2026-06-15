@@ -22,7 +22,7 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:5173',
-    'https://your-frontend.vercel.app' // 🔴 CHANGE THIS
+    'https://portfolio-ljlv-ebjm5akuh-vaibhavdeep99s-projects.vercel.app'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'DELETE', 'PUT', 'OPTIONS'],
