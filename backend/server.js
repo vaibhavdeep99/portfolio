@@ -8,7 +8,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 
-// ✅ Render port
+// ✅ PORT
 const PORT = process.env.PORT || 10000;
 
 // ENV
@@ -17,12 +17,12 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 // ---------------- MIDDLEWARE ----------------
 
-// ✅ CORS FIX (IMPORTANT FOR VERCEL)
+// ✅ FIXED CORS (IMPORTANT)
 app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:5173',
-    'https://your-frontend.vercel.app' // 🔴 CHANGE THIS
+    'https://portfolio-ljlv-tau.vercel.app'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'DELETE', 'PUT', 'OPTIONS'],
@@ -60,10 +60,12 @@ const upload = multer({
   }
 });
 
-// ---------------- FILE HELPERS ----------------
+// ---------------- FILE PATHS ----------------
 
 const portfolioFile = path.join(dataDir, 'portfolio.json');
 const messagesFile = path.join(dataDir, 'messages.json');
+
+// ---------------- HELPERS ----------------
 
 const getPortfolioData = () => {
   try {
@@ -115,10 +117,14 @@ const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader?.split(' ')[1];
 
-  if (!token) return res.status(401).json({ message: 'No token provided' });
+  if (!token) {
+    return res.status(401).json({ message: 'No token provided' });
+  }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ message: 'Invalid token' });
+    if (err) {
+      return res.status(403).json({ message: 'Invalid token' });
+    }
     req.user = user;
     next();
   });
@@ -142,25 +148,35 @@ app.post('/api/portfolio', authenticateToken, (req, res) => {
   res.json({ success: true });
 });
 
-// Login
+// LOGIN (FIXED)
 app.post('/api/login', (req, res) => {
   const { password } = req.body;
 
   if (password !== ADMIN_PASSWORD) {
-    return res.status(401).json({ success: false, message: 'Wrong password' });
+    return res.status(401).json({
+      success: false,
+      message: 'Wrong password'
+    });
   }
 
-  const token = jwt.sign({ admin: true }, JWT_SECRET, { expiresIn: '24h' });
+  const token = jwt.sign(
+    { admin: true },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  );
 
-  res.json({ success: true, token });
+  res.json({
+    success: true,
+    token
+  });
 });
 
-// Verify
+// VERIFY TOKEN
 app.get('/api/auth/verify', authenticateToken, (req, res) => {
   res.json({ valid: true });
 });
 
-// Contact
+// CONTACT
 app.post('/api/contact', (req, res) => {
   const { name, email, details } = req.body;
 
@@ -183,12 +199,12 @@ app.post('/api/contact', (req, res) => {
   res.json({ success: true });
 });
 
-// Messages
+// GET MESSAGES
 app.get('/api/messages', authenticateToken, (req, res) => {
   res.json(getMessages());
 });
 
-// Delete message
+// DELETE MESSAGE
 app.delete('/api/messages/:id', authenticateToken, (req, res) => {
   let messages = getMessages();
   messages = messages.filter(m => m.id !== req.params.id);
@@ -196,8 +212,9 @@ app.delete('/api/messages/:id', authenticateToken, (req, res) => {
   res.json({ success: true });
 });
 
-// Resume upload
-app.post('/api/resume/upload',
+// RESUME UPLOAD
+app.post(
+  '/api/resume/upload',
   authenticateToken,
   upload.single('resume'),
   (req, res) => {
@@ -217,13 +234,13 @@ app.post('/api/resume/upload',
   }
 );
 
-// Error handler
+// ERROR HANDLER
 app.use((err, req, res, next) => {
   console.error(err.message);
   res.status(500).json({ message: err.message });
 });
 
-// Start server
+// START SERVER
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
