@@ -466,7 +466,7 @@ const AdminDashboard = ({ portfolioData, onUpdateData }) => {
                 type="password"
                 id="adminPassword"
                 className="form-control"
-                placeholder="Enter password (default: admin123)"
+                placeholder="Enter password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

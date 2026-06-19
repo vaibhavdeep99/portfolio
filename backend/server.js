@@ -63,6 +63,17 @@ const messageSchema = new mongoose.Schema(
 const Portfolio = mongoose.model('Portfolio', portfolioSchema);
 const Message = mongoose.model('Message', messageSchema);
 
+const fileSchema = new mongoose.Schema(
+  {
+    filename: { type: String, required: true, unique: true },
+    contentType: { type: String, required: true },
+    data: { type: Buffer, required: true }
+  },
+  { timestamps: true }
+);
+
+const FileModel = mongoose.model('File', fileSchema);
+
 // ---------------- MIDDLEWARE ----------------
 
 app.use(
@@ -83,27 +94,16 @@ app.options('*', cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Create uploads directory if it doesn't exist
+// Serving uploads folder if it exists (local development fallback)
 const fs = require('fs');
 const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+if (fs.existsSync(uploadsDir)) {
+  app.use('/uploads', express.static(uploadsDir));
 }
-
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ---------------- MULTER ----------------
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `resume-${Date.now()}${ext}`);
-  }
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -329,7 +329,18 @@ app.post(
         });
       }
 
-      const resumeUrl = `/uploads/${req.file.filename}`;
+      // Save to MongoDB FileModel
+      await FileModel.findOneAndUpdate(
+        { filename: 'resume' },
+        {
+          filename: 'resume',
+          contentType: req.file.mimetype,
+          data: req.file.buffer
+        },
+        { upsert: true, new: true }
+      );
+
+      const resumeUrl = `/api/resume/download`;
 
       const portfolio = await Portfolio.findOneAndUpdate(
         {},
@@ -355,6 +366,21 @@ app.post(
   }
 );
 
+// Serve/Download resume from MongoDB
+app.get('/api/resume/download', async (req, res) => {
+  try {
+    const file = await FileModel.findOne({ filename: 'resume' });
+    if (!file) {
+      return res.status(404).send('Resume PDF not found');
+    }
+    res.set('Content-Type', file.contentType);
+    res.send(file.data);
+  } catch (err) {
+    console.error('Download resume error:', err.message);
+    res.status(500).send(err.message);
+  }
+});
+
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
@@ -364,10 +390,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔑 Admin password is set: ${!!ADMIN_PASSWORD}`);
-  console.log(`🔐 JWT secret is set: ${!!JWT_SECRET}`);
-});
+// Start server (only if running locally, not in serverless environment)
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔑 Admin password is set: ${!!ADMIN_PASSWORD}`);
+    console.log(`🔐 JWT secret is set: ${!!JWT_SECRET}`);
+  });
+}
+
+module.exports = app;
